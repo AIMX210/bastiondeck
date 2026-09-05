@@ -33,12 +33,13 @@ BastionDeck 不是又一个重型堡垒机：它把「批量在一批机器上�
 ### 从源码构建（需要 Go 1.23+；构建 Web 才需要 Node）
 
 ```bash
-# 仅后端：仓库已提交 internal/webui/dist，无 Node 也能直接构建
-make build         # 产出 bin/bastiondeck
+# 仅后端：仓库已提交 internal/webui/dist 占位页，无 Node 也能直接构建
+make build         # 产出 bin/bastiondeck（未构建前端时内嵌占位提示页）
 ./bin/bastiondeck  # 默认监听 127.0.0.1:8840，数据目录 ~/.bastiondeck
 
-# 重新构建前端（可选）
-cd web && npm ci && npm run build
+# 构建完整 Web 界面（需要 Node 20+；产物写入 internal/webui/dist 后由 go:embed 打包）
+make web           # = cd web && npm install && npm run build
+make build         # 之后重新编译，新二进制即内嵌完整界面
 
 # CLI 与独立 agent
 make cli           # bin/bdk
