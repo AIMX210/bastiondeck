@@ -163,7 +163,7 @@ func TestFullFlowSetupToExec(t *testing.T) {
 	for time.Now().Before(deadline) {
 		st, body = ts.do(t, "GET", "/api/runs/"+runID, cookie, nil)
 		if st != 200 {
-		t.Fatalf("get run %d", st)
+			t.Fatalf("get run %d", st)
 		}
 		run := body["data"].(map[string]any)["run"].(map[string]any)
 		status := run["status"].(string)
@@ -177,7 +177,7 @@ func TestFullFlowSetupToExec(t *testing.T) {
 		time.Sleep(40 * time.Millisecond)
 	}
 	if final == nil {
-		t.Fatal("run never succeeded")
+		t.Fatalf("run never succeeded")
 	}
 }
 
