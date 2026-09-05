@@ -4,6 +4,7 @@ import { CredApi, HostApi } from '@/api/endpoints'
 import type { Credential, Host } from '@/api/types'
 import { useAsync, useDebouncedValue } from '@/lib/hooks'
 import { useToast } from '@/lib/toast'
+import { useAuth } from '@/store/auth'
 import { Empty, ErrorBox, Loading, PageTitle } from '@/components/Common'
 import { StatusBadge } from '@/components/Badge'
 import { Modal } from '@/components/Modal'
@@ -22,13 +23,17 @@ const EMPTY: HostForm = {
 
 export function HostsPage() {
   const toast = useToast()
+  const { can } = useAuth()
+  const canExec = can('exec')
+  const canManage = can('manage_inventory')
   const [q, setQ] = useState('')
   const dq = useDebouncedValue(q)
   const [creating, setCreating] = useState(false)
   const [importing, setImporting] = useState(false)
   const [form, setForm] = useState(EMPTY)
   const hosts = useAsync(() => HostApi.list(dq ? { q: dq } : undefined), [dq], { intervalMs: 10_000 })
-  const creds = useAsync(() => CredApi.list(), [])
+  // Credential listing requires exec; skip the call for read-only viewers.
+  const creds = useAsync(() => canExec ? CredApi.list() : Promise.resolve(null), [canExec])
   const groups = useAsync(() => HostApi.groups(), [])
 
   const credMap = useMemo(() => {
@@ -77,13 +82,13 @@ export function HostsPage() {
           extra={
             <div className="toolbar" style={{ margin: 0 }}>
               <input placeholder="搜索名称/地址/标签" value={q} onChange={(e) => setQ(e.target.value)} style={{ width: 240 }} />
-              <button onClick={() => setImporting(true)}>导入 SSH config</button>
-              <button className="primary" onClick={() => setCreating(true)}>+ 添加主机</button>
+              {canManage && <button onClick={() => setImporting(true)}>导入 SSH config</button>}
+              {canManage && <button className="primary" onClick={() => setCreating(true)}>+ 添加主机</button>}
             </div>
           }
         />
         {hosts.loading ? <Loading /> : (hosts.data?.hosts.length === 0) ? (
-          <Empty text="还没有主机，点击右上角添加" />
+          <Empty text={canManage ? '还没有主机，点击右上角添加' : '还没有主机'} />
         ) : (
           <div className="panel scroll-x">
             <table className="grid">
@@ -104,13 +109,15 @@ export function HostsPage() {
                     <td><StatusBadge status={h.lastStatus || 'pending'} label={h.lastStatus || '未探测'} /></td>
                     <td>
                       <div className="row">
-                        <button className="sm" onClick={() => test(h.id)}>探测</button>
-                        <Link className="button" to={`/hosts/${h.id}`}><button className="sm">详情/终端</button></Link>
-                        <ConfirmButton danger message={`删除主机 ${h.name}？`} onConfirm={async () => {
-                          await HostApi.remove(h.id); hosts.reload(); toast.success('已删除')
-                        }}>
-                          <button className="sm danger">删除</button>
-                        </ConfirmButton>
+                        {canExec && <button className="sm" onClick={() => test(h.id)}>探测</button>}
+                        <Link className="button" to={`/hosts/${h.id}`}><button className="sm">详情</button></Link>
+                        {canManage && (
+                          <ConfirmButton danger message={`删除主机 ${h.name}？`} onConfirm={async () => {
+                            await HostApi.remove(h.id); hosts.reload(); toast.success('已删除')
+                          }}>
+                            <button className="sm danger">删除</button>
+                          </ConfirmButton>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -165,6 +172,7 @@ export function HostsPage() {
           groups={groups.data?.groups ?? []}
           hosts={hosts.data?.hosts ?? []}
           reload={() => { groups.reload(); hosts.reload() }}
+          readOnly={!canManage}
         />
 
         {importing && <ImportModal onClose={() => setImporting(false)} onDone={() => { setImporting(false); hosts.reload() }}

@@ -49,10 +49,12 @@ export function AgentsPage() {
                     <td>
                       <div className="row">
                         {a.status !== 'approved' && <button className="sm primary" onClick={async () => {
-                          await AgentApi.approve(a.id); list.reload(); toast.success('已批准')
+                          try { await AgentApi.approve(a.id); list.reload(); toast.success('已批准') }
+                          catch (e) { toast.error(e instanceof Error ? e.message : '操作失败') }
                         }}>批准</button>}
                         {a.status !== 'blocked' && <button className="sm danger" onClick={async () => {
-                          await AgentApi.block(a.id); list.reload(); toast.info('已拉黑')
+                          try { await AgentApi.block(a.id); list.reload(); toast.info('已拉黑') }
+                          catch (e) { toast.error(e instanceof Error ? e.message : '操作失败') }
                         }}>拉黑</button>}
                       </div>
                     </td>
