@@ -20,7 +20,7 @@ export function FilesPage() {
     if (!hostId && hosts.data?.hosts[0]) setHostId(hosts.data.hosts[0].id)
   }, [hosts.data, hostId])
 
-  const listing = useAsync(() => FsApi.list(hostId, path), [hostId, path])
+  const listing = useAsync(() => hostId ? FsApi.list(hostId, path) : Promise.resolve(null), [hostId, path])
 
   const go = useCallback((p: string) => {
     const norm = p.startsWith('/') ? p : `${path.replace(/\/$/, '')}/${p}`
@@ -30,8 +30,17 @@ export function FilesPage() {
 
   async function openFile(e: DirEntry) {
     try {
-      const r = await FsApi.read(hostId, join(path, e.name))
-      setEditing({ path: join(path, e.name), content: utf8FromB64(r.contentBase64), readOnly: r.size > 2_000_000 })
+      const p = join(path, e.name)
+      const r = await FsApi.read(hostId, p)
+      // The server caps reads at 1 MiB: at/above that cap the content may be
+      // truncated, so open read-only to avoid writing back a clipped file.
+      // sha256 seeds the optimistic-concurrency check on save.
+      setEditing({
+        path: p,
+        content: utf8FromB64(r.contentBase64),
+        sha: r.sha256,
+        readOnly: r.size >= 1_000_000,
+      })
     } catch (err) { toast.error(err instanceof Error ? err.message : '读取失败（可能是二进制文件）') }
   }
 

@@ -9,7 +9,7 @@ import { StatusBadge } from '@/components/Badge'
 import { EventFeed } from '@/components/EventFeed'
 import { shortId } from '@/lib/format'
 import {
-  collectGroupIds, collectTags, dedupeIds, requiredVariables, selectHosts,
+  collectTags, dedupeIds, renderTemplate, requiredVariables, selectHosts,
   type SelectionMode,
 } from '@/lib/selection'
 
@@ -18,6 +18,7 @@ export function ExecWizardPage() {
   const toast = useToast()
   const navigate = useNavigate()
   const hosts = useAsync(() => HostApi.list(), [])
+  const groups = useAsync(() => HostApi.groups(), [])
   const snippets = useAsync(() => SnippetApi.list(), [])
   const [step, setStep] = useState<1 | 2 | 3>(1)
 
@@ -35,7 +36,11 @@ export function ExecWizardPage() {
 
   const allHosts = hosts.data?.hosts ?? []
   const allTags = useMemo(() => collectTags(allHosts), [allHosts])
-  const allGroups = useMemo(() => collectGroupIds(allHosts), [allHosts])
+  const groupName = useMemo(() => {
+    const m = new Map<string, string>()
+    ;(groups.data?.groups ?? []).forEach((g) => m.set(g.id, g.name))
+    return m
+  }, [groups.data])
 
   const selectedHosts = useMemo<Host[]>(() =>
     selectHosts(allHosts, { mode, picked, groupId, tag }),
@@ -49,6 +54,11 @@ export function ExecWizardPage() {
   async function launch() {
     if (!command.trim()) { toast.error('命令不能为空'); return }
     if (selectedHosts.length === 0) { toast.error('没有选中任何目标'); return }
+    if (!timeoutSec || timeoutSec < 1) { toast.error('超时需为正整数（秒）'); return }
+    // Block up-front when a ${var} was left unfilled, mirroring the server's
+    // missing_vars rejection so we never fan out a half-rendered command.
+    const { missing } = renderTemplate(command, vars)
+    if (missing.length > 0) { toast.error(`请先填写变量：${missing.join(', ')}`); return }
     try {
       const r = await ExecApi.run({
         command,
@@ -59,7 +69,10 @@ export function ExecWizardPage() {
       })
       setRunId(r.runId)
       setStep(3)
+      setTargets([])
       toast.success(`已扇出到 ${selectedHosts.length} 台主机`)
+      // Fetch immediately instead of relying solely on the first SSE event.
+      refreshRun(r.runId)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : '发起失败')
     }
@@ -107,7 +120,7 @@ export function ExecWizardPage() {
               {mode === 'group' && (
                 <select style={{ width: 200 }} value={groupId} onChange={(e) => setGroupId(e.target.value)}>
                   <option value="">选择分组</option>
-                  {allGroups.map((g) => <option key={g} value={g}>{g}</option>)}
+                  {(groups.data?.groups ?? []).map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
                 </select>
               )}
               {mode === 'tag' && (
@@ -131,7 +144,7 @@ export function ExecWizardPage() {
                       </td>
                       <td>{h.name}</td>
                       <td className="mono">{h.address}:{h.port}</td>
-                      <td className="muted">{h.groupId ?? '—'}</td>
+                      <td className="muted">{h.groupId ? (groupName.get(h.groupId) ?? h.groupId) : '—'}</td>
                       <td className="muted">{(h.tags ?? []).join(', ')}</td>
                     </tr>
                   )

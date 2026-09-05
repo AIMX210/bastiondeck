@@ -94,7 +94,7 @@ export const FsApi = {
   stat: (hostId: string, path: string) =>
     api.post<{ stat: FileStat }>('/api/fs/stat', { hostId, path }),
   read: (hostId: string, path: string, limit = 1_000_000) =>
-    api.get<{ path: string; size: number; contentBase64: string }>('/api/fs/read', { hostId, path, limit }),
+    api.get<{ path: string; size: number; sha256?: string; contentBase64: string }>('/api/fs/read', { hostId, path, limit }),
   write: (hostId: string, path: string, content: ArrayBuffer | string, expectedSha?: string) => {
     const contentBase64 = typeof content === 'string'
       ? b64FromUtf8(content)
