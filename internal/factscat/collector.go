@@ -7,6 +7,7 @@ package factscat
 import (
 	"strconv"
 	"strings"
+	"sync"
 )
 
 // CollectCmd runs on the target host via any connector.Exec. Section markers
@@ -408,8 +409,10 @@ func prevPassive(p *Raw) int64 { if p == nil { return 0 }; return p.TCPPassive }
 func prevFail(p *Raw) int64 { if p == nil { return 0 }; return p.TCPFail }
 
 // Cache keeps the last raw sample per host for rate diffing (in-memory,
-// matching the repo's single-process assumption).
+// matching the repo's single-process assumption). Mutex-guarded: HTTP handlers
+// may race on the same host.
 type Cache struct {
+	mu   sync.Mutex
 	last map[string]*Raw
 }
 
@@ -417,6 +420,8 @@ func NewCache() *Cache { return &Cache{last: map[string]*Raw{}} }
 
 // Put stores the sample and returns the diffed snapshot.
 func (c *Cache) Put(hostID string, cur *Raw) *Snapshot {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	prev := c.last[hostID]
 	c.last[hostID] = cur
 	return Diff(prev, cur)
