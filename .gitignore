@@ -1,0 +1,28 @@
+# build output (note: internal/webui/dist IS committed so `go build` works
+# without a Node toolchain; run `make web` to regenerate it)
+/bin/
+*.test.binary
+*.out
+
+# node / web
+web/node_modules/
+web/dist/
+npm-debug.log*
+
+# local runtime data
+.bastiondeck/
+*.db
+*.db-wal
+*.db-shm
+*.bak
+runs/
+transfers/
+backups/
+tmp/
+
+# editor / os
+.idea/
+.vscode/
+.DS_Store
+*.swp
+coverage/
