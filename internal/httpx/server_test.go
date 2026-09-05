@@ -177,7 +177,7 @@ func TestFullFlowSetupToExec(t *testing.T) {
 		time.Sleep(40 * time.Millisecond)
 	}
 	if final == nil {
-		t.Fatalf("run never succeeded")
+		t.Fatal("run never succeeded")
 	}
 }
 
