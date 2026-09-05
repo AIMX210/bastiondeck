@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { DoctorApi, SettingsApi } from '@/api/endpoints'
 import { useAsync } from '@/lib/hooks'
 import { useToast } from '@/lib/toast'
+import { useAuth } from '@/store/auth'
 import { ErrorBox, Loading, PageTitle } from '@/components/Common'
 import { StatusBadge } from '@/components/Badge'
 
@@ -17,10 +18,18 @@ const FIELDS: { key: string; label: string; hint: string }[] = [
 
 export function SettingsPage() {
   const toast = useToast()
+  const { can } = useAuth()
   const loaded = useAsync(() => SettingsApi.get(), [])
-  const doctor = useAsync(() => DoctorApi.run(), [], { intervalMs: 30_000 })
+  const doctor = useAsync(() => can('exec') ? DoctorApi.run() : Promise.resolve(null), [])
   const [draft, setDraft] = useState<Record<string, string>>({})
   useEffect(() => { if (loaded.data) setDraft(loaded.data.settings) }, [loaded.data])
+
+  async function save() {
+    try {
+      await SettingsApi.put(draft)
+      toast.success('已保存'); loaded.reload()
+    } catch (e) { toast.error(e instanceof Error ? e.message : '保存失败') }
+  }
 
   return (
     <>
@@ -29,9 +38,9 @@ export function SettingsPage() {
         <ErrorBox message={loaded.error} />
         <div className="panel">
           <PageTitle title="运行参数" extra={
-            <button className="primary" onClick={async () => {
-              await SettingsApi.put(draft); toast.success('已保存'); loaded.reload()
-            }}>保存设置</button>
+            can('manage_inventory')
+              ? <button className="primary" onClick={save}>保存设置</button>
+              : <span className="muted">仅 admin/owner 可修改运行参数</span>
           } />
           {loaded.loading ? <Loading /> : (
             FIELDS.map((f) => (
@@ -43,10 +52,11 @@ export function SettingsPage() {
           )}
         </div>
 
+        {can('exec') && (
         <div className="panel">
           <PageTitle title="Doctor 自检" extra={
             <div className="row">
-              <StatusBadge status={doctor.data?.ok ? 'success' : 'failed'}
+              <StatusBadge status={doctor.data ? (doctor.data.ok ? 'success' : 'failed') : 'pending'}
                 label={doctor.data ? (doctor.data.ok ? '健康' : '存在异常项') : '—'} />
               <button onClick={() => doctor.reload()}>重新自检</button>
             </div>
@@ -62,6 +72,7 @@ export function SettingsPage() {
             </div>
           )}
         </div>
+        )}
       </div>
     </>
   )

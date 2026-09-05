@@ -16,10 +16,12 @@ export function BackupPage() {
 
   async function doExport() {
     if (pass.length < 8) { toast.error('备份口令至少 8 位'); return }
-    const r = await BackupApi.export(pass)
-    const bytes = Uint8Array.from(atob(r.backupBase64), (c) => c.charCodeAt(0))
-    download(`bastiondeck-backup-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.bak`, bytes)
-    toast.success(`已导出加密备份（${r.bytes} 字节）`)
+    try {
+      const r = await BackupApi.export(pass)
+      const bytes = Uint8Array.from(atob(r.backupBase64), (c) => c.charCodeAt(0))
+      download(`bastiondeck-backup-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.bak`, bytes)
+      toast.success(`已导出加密备份（${r.bytes} 字节）`)
+    } catch (e) { toast.error(e instanceof Error ? e.message : '导出失败') }
   }
 
   async function inspect() {

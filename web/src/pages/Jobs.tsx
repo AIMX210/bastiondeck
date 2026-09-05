@@ -3,6 +3,7 @@ import { ExecApi, HostApi, JobApi, SnippetApi } from '@/api/endpoints'
 import type { Job } from '@/api/types'
 import { useAsync } from '@/lib/hooks'
 import { useToast } from '@/lib/toast'
+import { useAuth } from '@/store/auth'
 import { Empty, ErrorBox, Loading, PageTitle } from '@/components/Common'
 import { Modal } from '@/components/Modal'
 import { ConfirmButton } from '@/components/Confirm'
@@ -10,6 +11,7 @@ import { fmtRelative, shortId } from '@/lib/format'
 
 export function JobsPage() {
   const toast = useToast()
+  const { can } = useAuth()
   const jobs = useAsync(() => JobApi.list(), [], { intervalMs: 10_000 })
   const hosts = useAsync(() => HostApi.list(), [])
   const snippets = useAsync(() => SnippetApi.list(), [])
@@ -17,6 +19,7 @@ export function JobsPage() {
 
   async function save() {
     if (!editing) return
+    if (!editing.name?.trim() || !editing.command?.trim()) { toast.error('名称和命令不能为空'); return }
     try {
       if (editing.id) await JobApi.update(editing.id, editing)
       else await JobApi.create(editing)
@@ -26,13 +29,20 @@ export function JobsPage() {
     } catch (e) { toast.error(e instanceof Error ? e.message : '保存失败') }
   }
 
+  async function runNow(id: string) {
+    try {
+      const r = await ExecApi.runJob(id)
+      toast.success(`已手动触发 ${shortId(r.runId)}`)
+    } catch (e) { toast.error(e instanceof Error ? e.message : '触发失败') }
+  }
+
   return (
     <>
       <div className="topbar"><h1>计划任务</h1></div>
       <div className="content">
         <ErrorBox message={jobs.error} />
         <PageTitle title="Cron 计划任务（cron-lite，5 段表达式）" extra={
-          <button className="primary" onClick={() => setEditing({
+          can('exec') && <button className="primary" onClick={() => setEditing({
             kind: 'scheduled', name: '', command: '', targetIds: [],
             scheduleExpr: '*/5 * * * *', enabled: true, timeoutMs: 60_000, concurrency: 4,
           })}>+ 新建计划任务</button>
@@ -54,13 +64,13 @@ export function JobsPage() {
                     <td className="muted">{fmtRelative(j.lastRunAt)} / {fmtRelative(j.nextRunAt)}</td>
                     <td>
                       <div className="row">
-                        <button className="sm" onClick={async () => {
-                          const r = await ExecApi.runJob(j.id); toast.success(`已手动触发 ${shortId(r.runId)}`)
-                        }}>立即跑</button>
-                        <button className="sm" onClick={() => setEditing(j)}>编辑</button>
-                        <ConfirmButton danger message="删除该计划任务？历史执行记录保留" onConfirm={async () => {
-                          await JobApi.remove(j.id); jobs.reload()
-                        }}><button className="sm danger">删</button></ConfirmButton>
+                        {can('exec') && <button className="sm" onClick={() => runNow(j.id)}>立即跑</button>}
+                        {can('exec') && <button className="sm" onClick={() => setEditing(j)}>编辑</button>}
+                        {can('exec') && (
+                          <ConfirmButton danger message="删除该计划任务？历史执行记录保留" onConfirm={async () => {
+                            await JobApi.remove(j.id); jobs.reload()
+                          }}><button className="sm danger">删</button></ConfirmButton>
+                        )}
                       </div>
                     </td>
                   </tr>

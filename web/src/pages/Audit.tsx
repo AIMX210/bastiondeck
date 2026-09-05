@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { AuditApi } from '@/api/endpoints'
-import { useAsync } from '@/lib/hooks'
+import { useAsync, useDebouncedValue } from '@/lib/hooks'
 import { useToast } from '@/lib/toast'
 import { ErrorBox, Loading, PageTitle } from '@/components/Common'
 import { StatusBadge } from '@/components/Badge'
@@ -11,9 +11,30 @@ export function AuditPage() {
   const [action, setAction] = useState('')
   const [actor, setActor] = useState('')
   const [result, setResult] = useState('')
+  const dAction = useDebouncedValue(action)
+  const dActor = useDebouncedValue(actor)
   const verify = useAsync(() => AuditApi.verify(), [])
-  const list = useAsync(() => AuditApi.list({ action, actor, result, limit: 100 }),
-    [action, actor, result], { intervalMs: 10_000 })
+  const list = useAsync(() => AuditApi.list({ action: dAction, actor: dActor, result, limit: 100 }),
+    [dAction, dActor, result], { intervalMs: 10_000 })
+
+  async function doExport() {
+    try {
+      const resp = await fetch('/api/audit/export', { credentials: 'include' })
+      if (!resp.ok) {
+        let msg = `导出失败（HTTP ${resp.status}）`
+        try {
+          const j = await resp.json()
+          if (j?.error?.message) msg = j.error.message
+        } catch { /* non-json body */ }
+        toast.error(msg)
+        return
+      }
+      download('audit-export.json', await resp.blob(), 'application/json')
+      toast.info('已导出')
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : '导出失败')
+    }
+  }
 
   return (
     <>
@@ -31,11 +52,7 @@ export function AuditPage() {
             )}
             <div className="grow" />
             <button onClick={() => verify.reload()}>重新校验</button>
-            <button onClick={async () => {
-              const resp = await fetch('/api/audit/export', { credentials: 'include' })
-              download('audit-export.json', await resp.blob(), 'application/json')
-              toast.info('已导出')
-            }}>导出 JSON</button>
+            <button onClick={doExport}>导出 JSON</button>
           </div>
           {verify.data?.chain.reason && <div className="err-text" style={{ marginTop: 8 }}>{verify.data.chain.reason}</div>}
         </div>
@@ -63,7 +80,7 @@ export function AuditPage() {
                     <td>{e.actorName ?? e.actorId ?? '—'}</td>
                     <td className="mono">{e.action}</td>
                     <td className="mono muted">{e.objectType}{e.objectId ? `:${e.objectId.slice(0, 8)}` : ''}</td>
-                    <td><StatusBadge status={e.result === 'success' ? 'success' : 'failed'} label={e.result} /></td>
+                    <td><StatusBadge status={e.result} /></td>
                     <td className="muted">{e.ip ?? '—'}</td>
                     <td className="mono muted">{e.hash.slice(0, 10)}</td>
                   </tr>

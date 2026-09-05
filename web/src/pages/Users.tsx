@@ -10,10 +10,11 @@ import { ConfirmButton } from '@/components/Confirm'
 import { fmtTime } from '@/lib/format'
 
 const ROLES = ['viewer', 'operator', 'admin', 'owner']
+const RANK: Record<string, number> = { viewer: 0, operator: 1, admin: 2, owner: 3 }
 
 export function UsersPage() {
   const toast = useToast()
-  const { user: me } = useAuth()
+  const { user: me, can } = useAuth()
   const list = useAsync(() => UsersApi.list(), [])
   const sessions = useAsync(() => UsersApi.mySessions(), [])
   const [form, setForm] = useState<{ username: string; displayName: string; role: string; password: string } | null>(null)
@@ -22,6 +23,8 @@ export function UsersPage() {
 
   async function createUser() {
     if (!form) return
+    if (!canAssign(form.role)) { toast.error('当前角色无权授予该角色'); return }
+    if (form.password.length < 10) { toast.error('初始密码至少 10 位'); return }
     try {
       await UsersApi.create(form)
       toast.success('用户已创建'); setForm(null); list.reload()
@@ -29,11 +32,21 @@ export function UsersPage() {
   }
 
   async function startTotp() {
-    const r = await AuthApi.totpSetup()
-    setTotp({ ...r, code: '' })
+    try {
+      const r = await AuthApi.totpSetup()
+      setTotp({ ...r, code: '' })
+    } catch (e) { toast.error(e instanceof Error ? e.message : 'TOTP 初始化失败') }
   }
 
-  const isOwner = me?.role === 'owner'
+  // Mirror server-side CanAssignRole: owner grants anyone; admin only manages
+  // strictly lower roles (viewer/operator) and never admin/owner.
+  const canAssign = (targetRole: string): boolean => {
+    if (!me) return false
+    if (me.role === 'owner') return true
+    if (targetRole === 'owner' || targetRole === 'admin') return false
+    return (RANK[me.role] ?? 0) > (RANK[targetRole] ?? 99)
+  }
+  const canManage = can('manage_users')
 
   return (
     <>
@@ -41,39 +54,43 @@ export function UsersPage() {
       <div className="content">
         <ErrorBox message={list.error} />
         <PageTitle title="用户（viewer &lt; operator &lt; admin &lt; owner）" extra={
-          isOwner ? <button className="primary" onClick={() => setForm({
-            username: '', displayName: '', role: 'operator', password: '',
-          })}>+ 新建用户</button> : <span className="muted">仅 owner 可管理用户</span>
+          canManage ? <button className="primary" onClick={() => setForm({
+            username: '', displayName: '', role: me?.role === 'owner' ? 'admin' : 'operator', password: '',
+          })}>+ 新建用户</button> : <span className="muted">当前角色无权管理用户</span>
         } />
         {list.loading ? <Loading /> : (
           <div className="panel scroll-x">
             <table className="grid">
               <thead><tr><th>用户名</th><th>显示名</th><th>角色</th><th>TOTP</th><th>最近登录</th><th style={{ width: 160 }}></th></tr></thead>
               <tbody>
-                {(list.data?.users ?? []).map((u: User) => (
+                {(list.data?.users ?? []).map((u: User) => {
+                  const editable = u.id !== me?.id && canAssign(u.role)
+                  return (
                   <tr key={u.id}>
                     <td>{u.username}{u.id === me?.id && '（我）'}</td>
                     <td>{u.displayName}</td>
                     <td>
-                      {isOwner && u.id !== me?.id ? (
+                      {editable ? (
                         <select value={u.role} onChange={async (e) => {
-                          await UsersApi.update(u.id, { role: e.target.value }); list.reload()
+                          try { await UsersApi.update(u.id, { role: e.target.value }); list.reload() }
+                          catch (err) { toast.error(err instanceof Error ? err.message : '更新失败') }
                         }}>
-                          {ROLES.map((r) => <option key={r}>{r}</option>)}
+                          {ROLES.filter(canAssign).map((r) => <option key={r}>{r}</option>)}
                         </select>
                       ) : u.role}
                     </td>
                     <td>{u.totpEnabled ? '已启用' : '未启用'}</td>
                     <td className="muted">{fmtTime(u.lastLoginAt)}</td>
                     <td>
-                      {isOwner && u.id !== me?.id && (
+                      {editable && (
                         <ConfirmButton danger message={`删除用户 ${u.username}？`} onConfirm={async () => {
                           await UsersApi.remove(u.id); list.reload()
                         }}><button className="sm danger">删除</button></ConfirmButton>
                       )}
                     </td>
                   </tr>
-                ))}
+                  )
+                })}
               </tbody>
             </table>
           </div>
@@ -100,7 +117,8 @@ export function UsersPage() {
                   <td className="mono">{s.ip}</td>
                   <td className="muted" style={{ maxWidth: 320, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.userAgent}</td>
                   <td>{!s.current && <button className="sm danger" onClick={async () => {
-                    await UsersApi.revoke(s.id); sessions.reload()
+                    try { await UsersApi.revoke(s.id); sessions.reload() }
+                    catch (e) { toast.error(e instanceof Error ? e.message : '吊销失败') }
                   }}>吊销</button>}</td>
                 </tr>
               ))}
@@ -118,7 +136,7 @@ export function UsersPage() {
               <input value={form.displayName} onChange={(e) => setForm({ ...form, displayName: e.target.value })} /></label>
             <label className="field"><span>角色</span>
               <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
-                {ROLES.map((r) => <option key={r}>{r}</option>)}
+                {ROLES.filter(canAssign).map((r) => <option key={r}>{r}</option>)}
               </select></label>
             <label className="field"><span>初始密码（≥10 位，首次登录建议修改）</span>
               <input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} /></label>
@@ -129,8 +147,11 @@ export function UsersPage() {
           <Modal title="修改密码" onClose={() => setPw(null)}
             footer={<><button onClick={() => setPw(null)}>取消</button>
               <button className="primary" onClick={async () => {
-                await AuthApi.changePassword(pw.oldPassword, pw.newPassword)
-                toast.success('密码已更新'); setPw(null)
+                if (pw.newPassword.length < 10) { toast.error('新密码至少 10 位'); return }
+                try {
+                  await AuthApi.changePassword(pw.oldPassword, pw.newPassword)
+                  toast.success('密码已更新'); setPw(null)
+                } catch (e) { toast.error(e instanceof Error ? e.message : '更新失败') }
               }}>保存</button></>}>
             <label className="field"><span>当前密码</span>
               <input type="password" value={pw.oldPassword} onChange={(e) => setPw({ ...pw, oldPassword: e.target.value })} /></label>
@@ -142,7 +163,9 @@ export function UsersPage() {
         {totp && (
           <Modal title="绑定 TOTP（RFC 6238）" onClose={() => setTotp(null)}
             footer={<button className="primary" onClick={async () => {
-              await AuthApi.totpEnable(totp.code); toast.success('TOTP 已启用'); setTotp(null); list.reload()
+              try {
+                await AuthApi.totpEnable(totp.code); toast.success('TOTP 已启用'); setTotp(null); list.reload()
+              } catch (e) { toast.error(e instanceof Error ? e.message : '绑定失败') }
             }}>确认绑定</button>}>
             <p className="muted">把以下密钥录入验证器（或扫描 otpauth 二维码）：</p>
             <pre className="mono panel">{totp.secret}{'\n'}{totp.uri}</pre>
