@@ -62,11 +62,11 @@ make agent         # bin/bd-agent
 ### CLI 示例
 
 ```bash
-bdk --server http://127.0.0.1:8840 login
+bdk login --url http://127.0.0.1:8840   # 首次登录，令牌保存在本地配置（也可 --user/--password）
 bdk hosts ls
-bdk exec --tag web --concurrency 8 -- 'systemctl restart app'
-bdk runs watch run_xxxx
-bdk fs put ./deploy.sh /opt/app/deploy.sh --host hst_xxxx
+bdk run --hosts hst_a,hst_b -- 'systemctl restart app'   # 或 --group <grp>、--timeout 60
+bdk runx run_xxxx                       # 跟踪某次运行到结束并打印输出
+bdk audit ls
 ```
 
 ---
