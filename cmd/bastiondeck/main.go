@@ -123,7 +123,7 @@ func main() {
 	rootCtx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go sched.Run(rootCtx)
-	go backgroundLoops(rootCtx, metrics)
+	go backgroundLoops(rootCtx, metrics, authSvc)
 
 	httpSrv := srv.ServerConfig(cfg.Listen)
 	go func() {
@@ -190,16 +190,23 @@ func ensureDirs(cfg *config.Config) {
 }
 
 // backgroundLoops periodically collect metrics and prune old series.
-func backgroundLoops(ctx context.Context, c *metricsx.Collector) {
-	t := time.NewTicker(5 * time.Minute)
-	defer t.Stop()
+func backgroundLoops(ctx context.Context, c *metricsx.Collector, authSvc *auth.Service) {
+	metricsTick := time.NewTicker(5 * time.Minute)
+	defer metricsTick.Stop()
+	// 登录限流窗口清理：此前 PruneAttempts 无人调用，login_attempts 会无限增长。
+	attemptTick := time.NewTicker(time.Hour)
+	defer attemptTick.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-t.C:
+		case <-metricsTick.C:
 			if _, err := c.Prune(ctx); err != nil {
 				log.Printf("metrics prune: %v", err)
+			}
+		case <-attemptTick.C:
+			if err := authSvc.PruneAttempts(ctx); err != nil {
+				log.Printf("login attempts prune: %v", err)
 			}
 		}
 	}

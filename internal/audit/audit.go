@@ -75,31 +75,40 @@ func (s *Service) Write(ctx context.Context, actor Actor, action, objType, objID
 	at := store.Now()
 	eventID := store.NewID(store.PrefixAudit)
 
-	var prevHash string
-	var seq int64
-	err := s.db.QueryRowContext(ctx, `SELECT COALESCE(seq,0), COALESCE(hash,'') FROM (
-        SELECT id AS seq, hash FROM audit_logs ORDER BY id DESC LIMIT 1)`).Scan(&seq, &prevHash)
-	if errors.Is(err, sql.ErrNoRows) {
-		prevHash, seq = "", 0
-	} else if err != nil {
-		return nil, err
-	}
-	payload := canonicalPayload(at, eventID, actor.ID, actor.Name, action, objType, objID, result, prevHash, rawDetail)
-	hash := store.HashToken(payload)
+	// 哈希链必须串行化：读取 prevHash 与 INSERT 必须在同一事务内完成，
+	// 否则并发写入会读到同一条 prevHash 导致链分叉，Verify 误报篡改。
+	var entry *Entry
+	txErr := store.InTx(ctx, s.db, func(tx *sql.Tx) error {
+		var prevHash string
+		var seq int64
+		err := tx.QueryRow(`SELECT COALESCE(seq,0), COALESCE(hash,'') FROM (
+            SELECT id AS seq, hash FROM audit_logs ORDER BY id DESC LIMIT 1)`).Scan(&seq, &prevHash)
+		if errors.Is(err, sql.ErrNoRows) {
+			prevHash, seq = "", 0
+		} else if err != nil {
+			return err
+		}
+		payload := canonicalPayload(at, eventID, actor.ID, actor.Name, action, objType, objID, result, prevHash, rawDetail)
+		hash := store.HashToken(payload)
 
-	_, err = s.db.ExecContext(ctx, `INSERT INTO audit_logs
-        (event_id,at,actor_id,actor_name,action,object_type,object_id,result,detail_json,prev_hash,hash,ip)
-        VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`,
-		eventID, at, nullStr(actor.ID), nullStr(actor.Name), action, nullStr(objType), nullStr(objID),
-		result, string(orEmpty(rawDetail)), prevHash, hash, nullStr(actor.IP))
-	if err != nil {
-		return nil, err
+		if _, err := tx.Exec(`INSERT INTO audit_logs
+            (event_id,at,actor_id,actor_name,action,object_type,object_id,result,detail_json,prev_hash,hash,ip)
+            VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`,
+			eventID, at, nullStr(actor.ID), nullStr(actor.Name), action, nullStr(objType), nullStr(objID),
+			result, string(orEmpty(rawDetail)), prevHash, hash, nullStr(actor.IP)); err != nil {
+			return err
+		}
+		entry = &Entry{
+			EventID: eventID, At: at, ActorID: actor.ID, ActorName: actor.Name,
+			Action: action, ObjectType: objType, ObjectID: objID, Result: result,
+			Detail: rawDetail, PrevHash: prevHash, Hash: hash, IP: actor.IP, Seq: seq + 1,
+		}
+		return nil
+	})
+	if txErr != nil {
+		return nil, txErr
 	}
-	return &Entry{
-		EventID: eventID, At: at, ActorID: actor.ID, ActorName: actor.Name,
-		Action: action, ObjectType: objType, ObjectID: objID, Result: result,
-		Detail: rawDetail, PrevHash: prevHash, Hash: hash, IP: actor.IP, Seq: seq + 1,
-	}, nil
+	return entry, nil
 }
 
 func orEmpty(b json.RawMessage) []byte {

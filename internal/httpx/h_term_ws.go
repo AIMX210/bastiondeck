@@ -2,14 +2,13 @@ package httpx
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"sync"
 	"time"
 
 	"github.com/coder/websocket"
-
-	"bastiondeck/internal/audit"
 )
 
 // termMessage is the JSON wire protocol for /ws/term.
@@ -18,7 +17,9 @@ type termMessage struct {
 	HostID string `json:"hostId,omitempty"` // open
 	Cols   int    `json:"cols,omitempty"`
 	Rows   int    `json:"rows,omitempty"`
-	Data   string `json:"data,omitempty"` // input/output as base64? we use latin1-safe string
+	Data   string `json:"data,omitempty"`           // input（UTF-8 文本）/ output（base64，见 Enc）
+	Enc    string `json:"enc,omitempty"`            // output 消息恒为 "base64"：PTY 字节流并非合法 UTF-8，
+	                                              // 走 JSON string 会被替换为 U+FFFD 造成终端输出损坏
 }
 
 // terminalWS upgrades to a WebSocket, opens a PTY on the requested host and
@@ -29,9 +30,10 @@ func (s *Server) terminalWS(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 400, "bad_request", "hostId required")
 		return
 	}
-	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
-		OriginPatterns: []string{"*"},
-	})
+	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{})
+	// 不设置 OriginPatterns：coder/websocket 默认仅允许同源（+ 无 Origin 的
+	// 原生客户端）。此前显式写 ["*"] 等于关闭跨站 WebSocket 劫持（CSWSH）
+	// 防护——浏览器会自动携带 cookie，任意网页都能借此开终端。
 	if err != nil {
 		return
 	}
@@ -78,10 +80,13 @@ func (s *Server) terminalWS(w http.ResponseWriter, r *http.Request) {
 	// Remote -> browser.
 	go func() {
 		buf := make([]byte, 8192)
+		b64 := make([]byte, 0, 8192*4/3+4)
 		for {
 			n, err := pty.Read(buf)
 			if n > 0 {
-				send(termMessage{Type: "output", Data: string(buf[:n])})
+				b64 = b64[:0]
+				b64 = base64.StdEncoding.AppendEncode(b64, buf[:n])
+				send(termMessage{Type: "output", Data: string(b64), Enc: "base64"})
 			}
 			if err != nil {
 				send(termMessage{Type: "closed"})
@@ -127,5 +132,3 @@ func termErr(conn *websocket.Conn, msg string) {
 	b, _ := json.Marshal(termMessage{Type: "error", Data: msg})
 	_ = conn.Write(context.Background(), websocket.MessageText, b)
 }
-
-var _ = audit.Actor{}

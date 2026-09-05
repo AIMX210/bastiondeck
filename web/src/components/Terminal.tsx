@@ -35,9 +35,14 @@ export function TerminalPane({ hostId }: { hostId: string }) {
     ws.onmessage = (ev) => {
       try {
         const m = JSON.parse(ev.data)
-        if (m.type === 'output') term.write(m.data)
-        else if (m.type === 'closed') { term.write('\r\n\x1b[33m[session closed]\x1b[0m\r\n') }
-        else if (m.type === 'error') term.write(`\r\n\x1b[31m[error] ${m.data}\x1b[0m\r\n`)
+        if (m.type === 'output') {
+          // output 一律为 base64（PTY 字节流并非合法 UTF-8，JSON 字符串会损坏）
+          const raw = atob(m.data)
+          const bytes = new Uint8Array(raw.length)
+          for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i)
+          term.write(bytes)
+        } else if (m.type === 'closed') { term.write('\r\n\x1b[33m[session closed]\x1b[0m\r\n') }
+        else if (m.type === 'error') { term.write(`\r\n\x1b[31m[error] ${m.data}\x1b[0m\r\n`) }
       } catch { /* ignore */ }
     }
     ws.onclose = () => term.write('\r\n\x1b[33m[disconnected]\x1b[0m\r\n')

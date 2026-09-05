@@ -26,3 +26,4 @@ tmp/
 .DS_Store
 *.swp
 coverage/
+web/tsconfig.tsbuildinfo

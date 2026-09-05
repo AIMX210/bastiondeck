@@ -59,6 +59,7 @@ func (a *AgentClient) Exec(ctx context.Context, req connector.ExecRequest) (*con
 		return nil, err
 	}
 	var stdout, stderr []byte
+	var limit = req.MaxBufferBytes
 	for {
 		select {
 		case <-ctx.Done():
@@ -74,10 +75,13 @@ func (a *AgentClient) Exec(ctx context.Context, req connector.ExecRequest) (*con
 				if req.OnOutput != nil {
 					req.OnOutput(f.Stream, b)
 				}
-				if f.Stream == "stderr" {
-					stderr = append(stderr, b...)
-				} else {
-					stdout = append(stdout, b...)
+				// 内存聚合受 MaxBufferBytes 约束，防止超长输出撑爆守护进程。
+				if limit <= 0 || int64(len(stdout))+int64(len(stderr)) < limit {
+					if f.Stream == "stderr" {
+						stderr = append(stderr, b...)
+					} else {
+						stdout = append(stdout, b...)
+					}
 				}
 			case "exec_end":
 				return &connector.ExecResult{

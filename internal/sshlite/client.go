@@ -80,8 +80,8 @@ func (c *Client) Exec(ctx context.Context, req connector.ExecRequest) (*connecto
 	outW := io.Writer(&stdout)
 	errW := io.Writer(&stderr)
 	if req.OnOutput != nil {
-		outW = &teeWriter{buf: &stdout, stream: "stdout", cb: req.OnOutput}
-		errW = &teeWriter{buf: &stderr, stream: "stderr", cb: req.OnOutput}
+		outW = &teeWriter{buf: &stdout, stream: "stdout", cb: req.OnOutput, limit: req.MaxBufferBytes}
+		errW = &teeWriter{buf: &stderr, stream: "stderr", cb: req.OnOutput, limit: req.MaxBufferBytes}
 	}
 	sess.Stdout, sess.Stderr = outW, errW
 
@@ -128,14 +128,23 @@ type teeWriter struct {
 	buf    *bytes.Buffer
 	stream string
 	cb     func(stream string, b []byte)
+	limit  int64 // 内存缓冲上限（0=不限）：磁盘侧由 cappedWriter 另行封顶
 }
 
 func (t *teeWriter) Write(p []byte) (int, error) {
-	n, err := t.buf.Write(p)
-	if n > 0 {
-		cp := make([]byte, n)
-		copy(cp, p[:n])
+	if t.limit <= 0 || int64(t.buf.Len()) < t.limit {
+		room := int64(len(p))
+		if t.limit > 0 {
+			if left := t.limit - int64(t.buf.Len()); left < room {
+				room = left
+			}
+		}
+		t.buf.Write(p[:room])
+	}
+	if len(p) > 0 {
+		cp := make([]byte, len(p))
+		copy(cp, p)
 		t.cb(t.stream, cp)
 	}
-	return n, err
+	return len(p), nil
 }

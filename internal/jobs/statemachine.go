@@ -31,8 +31,10 @@ func CanTransitionTarget(from, to string) bool {
 // IsTerminal reports whether a target/run state is final.
 func IsTerminal(s string) bool { return terminalStates[s] }
 
-// Aggregate computes the run-level status from target outcomes with a fixed
-// priority: cancelled (whole run aborted) > timeout > failed > lost > success.
+// Aggregate computes the run-level status from target outcomes. cancelled
+// wins only when it is the sole non-success state (the run was aborted before
+// any target definitively failed); any timeout/failed/lost outcome outranks
+// it because it carries more diagnostic information.
 func Aggregate(statuses []string) string {
 	if len(statuses) == 0 {
 		return StatusSuccess

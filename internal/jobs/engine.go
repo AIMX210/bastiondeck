@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -137,6 +138,7 @@ func (e *Engine) publish(t string, data any) {
 
 // execute fans out across targets with a bounded semaphore and aggregates.
 func (e *Engine) execute(ctx context.Context, runID, jobID string, in StartInput, targets []RunTarget) {
+	_ = jobID // 保留参数以对齐签名；run 级状态由 SetRunStatus 汇总
 	defer func() {
 		e.mu.Lock()
 		delete(e.live, runID)
@@ -172,7 +174,6 @@ func (e *Engine) execute(ctx context.Context, runID, jobID string, in StartInput
 	summary := Summarise(statuses)
 	_ = e.repo.SetRunStatus(context.Background(), runID, agg, summary, true)
 	e.publish("run_update", map[string]any{"runId": runID, "status": agg, "summary": summary})
-	_ = jobID
 }
 
 // runOne connects and executes against one target.
@@ -190,8 +191,9 @@ func (e *Engine) runOne(ctx context.Context, t RunTarget, in StartInput) string 
 		return e.finishTarget(ctx, t, StatusLost, nil, classifyConn(err))
 	}
 	res, err := cli.Exec(ctx, connector.ExecRequest{
-		Command: in.Command,
-		Timeout: in.Timeout,
+		Command:        in.Command,
+		Timeout:        in.Timeout,
+		MaxBufferBytes: e.maxOutput,
 		OnOutput: func(stream string, b []byte) {
 			if stream == "stdout" {
 				_, _ = outW.Write(b)
@@ -203,13 +205,8 @@ func (e *Engine) runOne(ctx context.Context, t RunTarget, in StartInput) string 
 	if err != nil {
 		return e.finishTarget(ctx, t, StatusLost, nil, err.Error())
 	}
-	// Flush any non-callback output.
-	if len(res.Stdout) > 0 {
-		_, _ = outW.Write(res.Stdout)
-	}
-	if len(res.Stderr) > 0 {
-		_, _ = errW.Write(res.Stderr)
-	}
+	// OnOutput 已把全部流式输出写入产物文件（sshlite/agent 两个后端均保证
+	// 回调覆盖完整输出）；此处不得再 flush res.Stdout/Stderr，否则产物内容翻倍。
 	_ = outW.Close()
 	_ = errW.Close()
 	exit := res.ExitCode
@@ -384,6 +381,10 @@ func (e *Engine) RetryFailed(ctx context.Context, runID string, actor audit.Acto
 func (e *Engine) ReadOutput(ctx context.Context, runID, targetID, stream string, offset int64) ([]byte, int64, error) {
 	if stream != "stdout" && stream != "stderr" {
 		return nil, 0, fmt.Errorf("bad stream")
+	}
+	// 纵深防御：ID 必须符合内部前缀，防止拼路径逃逸（正常路由已由 mux 限制）。
+	if !strings.HasPrefix(runID, store.PrefixRun) || !strings.HasPrefix(targetID, store.PrefixTarget) {
+		return nil, 0, fmt.Errorf("bad id")
 	}
 	p := filepath.Join(e.dataDir, "runs", runID, targetID+"."+stream)
 	f, err := os.Open(p)

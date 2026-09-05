@@ -2,10 +2,11 @@ package httpx
 
 import (
 	"context"
+	"log"
 	"net"
 	"net/http"
+	"runtime/debug"
 	"strings"
-	"time"
 
 	"bastiondeck/internal/auth"
 )
@@ -144,11 +145,13 @@ func bearer(r *http.Request) (string, bool) {
 	return "", false
 }
 
-// recoverMiddleware turns panics into 500s without leaking internals.
+// recoverMiddleware turns panics into 500s without leaking internals, but
+// logs the panic and stack server-side (operator's own host) for debuggability.
 func recoverMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if rec := recover(); rec != nil {
+				log.Printf("panic %s %s: %v\n%s", r.Method, r.URL.Path, rec, debug.Stack())
 				writeErr(w, 500, "internal", "internal server error")
 			}
 		}()
@@ -163,5 +166,3 @@ func noCache(next http.Handler) http.Handler {
 		next.ServeHTTP(w, r)
 	})
 }
-
-var _ = time.Second

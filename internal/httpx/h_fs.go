@@ -134,6 +134,8 @@ func (s *Server) fsMkdir(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 502, "fs_error", err.Error())
 		return
 	}
+	_, _ = s.deps.Audit.Write(r.Context(), s.actorOf(r), "fs.mkdir", "host", req.HostID, "success",
+		map[string]any{"path": req.Path})
 	writeJSON(w, 200, map[string]any{"ok": true})
 }
 

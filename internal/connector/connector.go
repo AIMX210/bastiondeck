@@ -23,6 +23,9 @@ type ExecRequest struct {
 	Timeout    time.Duration
 	Cols, Rows int
 	OnOutput   func(stream string, b []byte) // optional incremental callback
+	// MaxBufferBytes bounds the memory accumulated for Stdout/Stderr in the
+	// ExecResult (streaming callbacks are unaffected). 0 = unlimited.
+	MaxBufferBytes int64
 }
 
 // ExecResult is the definite outcome of an execution.

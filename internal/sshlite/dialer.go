@@ -85,16 +85,25 @@ func (d *Dialer) dialRec(ctx context.Context, h *inventory.Host, depth int) (*ss
 			_ = jumpClient.Close()
 			return nil, "", "", fmt.Errorf("dial via jump: %w", err)
 		}
+		// 握手超时看护：dialCtx 到期或父 ctx 取消时掐断连接；握手成功后
+		// close(stop) 解除看护。此前无 stop 通道，看护 goroutine 会在
+		// DialTimeout 到点时无条件 Close(conn)，把已建立的跳板连接误杀。
+		stop := make(chan struct{})
 		go func() {
-			<-dialCtx.Done()
-			_ = conn.Close()
+			select {
+			case <-dialCtx.Done():
+				_ = conn.Close()
+			case <-stop:
+			}
 		}()
 		nc, chans, reqs, err := ssh.NewClientConn(conn, addr, cfg)
 		if err != nil {
+			close(stop)
 			_ = conn.Close()
 			_ = jumpClient.Close()
 			return nil, "", "", fmt.Errorf("ssh over jump: %w", err)
 		}
+		close(stop)
 		raw = ssh.NewClient(nc, chans, reqs)
 	} else {
 		nd := net.Dialer{Timeout: d.timeout()}

@@ -91,8 +91,12 @@ func (c *Config) FromEnv() error {
 		}
 	}
 	if v, ok := get("ENABLE_AGENT"); ok {
-		b, _ := strconv.ParseBool(v)
-		c.EnableAgent = b
+		b, err := strconv.ParseBool(v)
+		if err != nil {
+			problems = append(problems, "BDK_ENABLE_AGENT must be a boolean")
+		} else {
+			c.EnableAgent = b
+		}
 	}
 	if v, ok := get("AGENT_LISTEN"); ok && v != "" {
 		c.AgentListen = v
