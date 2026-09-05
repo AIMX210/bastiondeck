@@ -77,6 +77,7 @@ func (p helpPane) view(w, h int) string {
 }
 
 // ---------- Exec dialog ----------
+
 type execDialog struct {
 	input  textinput.Model
 	active bool
