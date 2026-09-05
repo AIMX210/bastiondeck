@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { ExecApi, HostApi, MetricsApi } from '@/api/endpoints'
 import { useAsync } from '@/lib/hooks'
 import { useToast } from '@/lib/toast'
+import { useAuth } from '@/store/auth'
 import { useNavigate } from 'react-router-dom'
 import { ErrorBox, KeyVal, Loading, PageTitle, Sparkline, Stat } from '@/components/Common'
 import { StatusBadge } from '@/components/Badge'
@@ -15,9 +16,15 @@ export function HostDetailPage() {
   const { id = '' } = useParams()
   const toast = useToast()
   const navigate = useNavigate()
-  const [tab, setTab] = useState<'term' | 'facts' | 'metrics' | 'exec'>('term')
+  const { can } = useAuth()
+  const canExec = can('exec')
+  const canManage = can('manage_inventory')
+  const [tab, setTab] = useState<'term' | 'facts' | 'metrics' | 'exec'>(canExec ? 'term' : 'facts')
   const host = useAsync(() => HostApi.get(id), [id])
-  const facts = useAsync(() => HostApi.facts(id).then((r) => r.facts).catch(() => null), [id])
+  const facts = useAsync(
+    () => canExec ? HostApi.facts(id).then((r) => r.facts).catch(() => null) : Promise.resolve(null),
+    [id, canExec],
+  )
   const metrics = useAsync(() => MetricsApi.host(id), [id], { intervalMs: 15_000 })
   const [cmd, setCmd] = useState('uname -a')
   const [runId, setRunId] = useState<string | null>(null)
@@ -61,19 +68,27 @@ export function HostDetailPage() {
           ]} />
           <div className="toolbar" style={{ marginTop: 12, marginBottom: 0 }}>
             <button onClick={() => host.reload()}>刷新</button>
-            <button onClick={async () => {
-              try { await HostApi.resetKey(id); toast.success('已重置，下次连接重新信任'); host.reload() }
-              catch (e) { toast.error(e instanceof Error ? e.message : '失败') }
-            }}>重置主机密钥</button>
+            {canManage && (
+              <button onClick={async () => {
+                try { await HostApi.resetKey(id); toast.success('已重置，下次连接重新信任'); host.reload() }
+                catch (e) { toast.error(e instanceof Error ? e.message : '失败') }
+              }}>重置主机密钥</button>
+            )}
             <div className="grow" />
-            <ConfirmButton danger message={`删除主机 ${h.name}？`} onConfirm={async () => {
-              await HostApi.remove(id); navigate('/hosts')
-            }}><button className="sm danger">删除</button></ConfirmButton>
+            {canManage && (
+              <ConfirmButton danger message={`删除主机 ${h.name}？`} onConfirm={async () => {
+                await HostApi.remove(id); navigate('/hosts')
+              }}><button className="sm danger">删除</button></ConfirmButton>
+            )}
           </div>
         </div>
 
         <div className="pill-tabs">
-          {([['term', '交互终端'], ['exec', '快捷执行'], ['facts', '主机信息'], ['metrics', '指标']] as const).map(
+          {([
+            ...(canExec ? ([['term', '交互终端'], ['exec', '快捷执行']] as const) : []),
+            ['facts', '主机信息'] as const,
+            ['metrics', '指标'] as const,
+          ]).map(
             ([k, l]) => <button key={k} className={tab === k ? 'active' : ''} onClick={() => setTab(k)}>{l}</button>)}
         </div>
 

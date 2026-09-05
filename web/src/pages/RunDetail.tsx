@@ -18,6 +18,7 @@ export function RunDetailPage() {
   const [stream, setStream] = useState<'stdout' | 'stderr'>('stdout')
   const [text, setText] = useState('')
   const offsetRef = useRef(0)
+  const preRef = useRef<HTMLPreElement>(null)
   const live = run.data?.live
 
   useEventSource(() => run.reload())
@@ -49,9 +50,18 @@ export function RunDetailPage() {
       } catch { /* transient */ }
     }
     pull()
+    // Keep polling only while the run is live; once terminal, a final pull
+    // above is enough and we stop hammering the endpoint.
+    if (!live) return
     const t = window.setInterval(pull, 1500)
     return () => { stop = true; window.clearInterval(t) }
-  }, [id, active, stream])
+  }, [id, active, stream, live])
+
+  // Follow-tail: keep the latest output in view as it streams in.
+  useEffect(() => {
+    const el = preRef.current
+    if (el) el.scrollTop = el.scrollHeight
+  }, [text])
 
   if (run.loading && !run.data) return <div className="content"><Loading /></div>
   const r = run.data?.run
@@ -87,7 +97,11 @@ export function RunDetailPage() {
             )}
             {!live && r.summary.failed + r.summary.lost > 0 && (
               <button onClick={async () => {
-                const nr = await RunApi.retry(id); toast.success('已重投失败目标'); window.location.hash = `#/runs/${nr.runId}`
+                try {
+                  const nr = await RunApi.retry(id)
+                  toast.success('已重投失败目标')
+                  window.location.hash = `#/runs/${nr.runId}`
+                } catch (e) { toast.error(e instanceof Error ? e.message : '重试失败') }
               }}>仅重试失败/失联</button>
             )}
           </div>
@@ -119,7 +133,7 @@ export function RunDetailPage() {
               {targets.find((t) => t.id === active)?.errorText &&
                 <span className="err-text">{targets.find((t) => t.id === active)?.errorCode}: {targets.find((t) => t.id === active)?.errorText}</span>}
             </div>
-            <pre className="mono" style={{
+            <pre ref={preRef} className="mono" style={{
               background: '#0a0e12', borderRadius: 8, padding: 12, minHeight: 360,
               maxHeight: '60vh', overflow: 'auto', whiteSpace: 'pre-wrap', margin: 0,
             }}>{text || '（暂无输出）'}</pre>

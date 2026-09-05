@@ -3,6 +3,7 @@ import { CredApi } from '@/api/endpoints'
 import type { Credential } from '@/api/types'
 import { useAsync } from '@/lib/hooks'
 import { useToast } from '@/lib/toast'
+import { useAuth } from '@/store/auth'
 import { Empty, ErrorBox, Loading, PageTitle } from '@/components/Common'
 import { Modal } from '@/components/Modal'
 import { ConfirmButton } from '@/components/Confirm'
@@ -10,11 +11,14 @@ import { fmtTime, shortId } from '@/lib/format'
 
 export function CredentialsPage() {
   const toast = useToast()
+  const { can } = useAuth()
+  const writable = can('manage_inventory')
   const list = useAsync(() => CredApi.list(), [])
   const [form, setForm] = useState<{ name: string; kind: 'password'|'private_key'; secret: string; passphrase: string } | null>(null)
 
   async function save() {
     if (!form) return
+    if (!form.name.trim() || !form.secret.trim()) { toast.error('名称和凭据内容不能为空'); return }
     try {
       await CredApi.create({
         name: form.name, kind: form.kind, secret: form.secret,
@@ -31,7 +35,7 @@ export function CredentialsPage() {
       <div className="content">
         <ErrorBox message={list.error} />
         <PageTitle title="凭据（密文存储，界面永不回显明文）" extra={
-          <button className="primary" onClick={() => setForm({ name: '', kind: 'password', secret: '', passphrase: '' })}>+ 添加凭据</button>
+          writable && <button className="primary" onClick={() => setForm({ name: '', kind: 'password', secret: '', passphrase: '' })}>+ 添加凭据</button>
         } />
         {list.loading ? <Loading /> : (list.data?.credentials.length === 0) ? <Empty text="暂无凭据" /> : (
           <div className="panel scroll-x">
@@ -45,9 +49,11 @@ export function CredentialsPage() {
                     <td className="mono muted">{c.fingerprint ? shortId(c.fingerprint, 20) : '—'}</td>
                     <td className="muted">{fmtTime(c.createdAt)}</td>
                     <td>
-                      <ConfirmButton danger message="删除该凭据？引用它的主机将无法连接" onConfirm={async () => {
-                        await CredApi.remove(c.id); list.reload()
-                      }}><button className="sm danger">删除</button></ConfirmButton>
+                      {writable && (
+                        <ConfirmButton danger message="删除该凭据？引用它的主机将无法连接" onConfirm={async () => {
+                          await CredApi.remove(c.id); list.reload()
+                        }}><button className="sm danger">删除</button></ConfirmButton>
+                      )}
                     </td>
                   </tr>
                 ))}
