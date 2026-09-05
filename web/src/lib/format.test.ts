@@ -27,6 +27,16 @@ describe('format helpers', () => {
     expect(statusLabel('weird')).toBe('weird')
   })
 
+  it('statusLabel covers tunnel / agent / audit states', () => {
+    expect(statusLabel('active')).toBe('运行中')
+    expect(statusLabel('starting')).toBe('建立中')
+    expect(statusLabel('stopped')).toBe('已停止')
+    expect(statusLabel('approved')).toBe('已批准')
+    expect(statusLabel('blocked')).toBe('已拉黑')
+    expect(statusLabel('denied')).toBe('已拒绝')
+    expect(statusLabel('failure')).toBe('失败')
+  })
+
   it('classNames drops falsy entries', () => {
     expect(classNames('a', false, null, undefined, 'b')).toBe('a b')
   })

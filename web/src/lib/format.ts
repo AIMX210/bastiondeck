@@ -61,6 +61,12 @@ export function modeString(mode: number): string {
 export const STATUS_LABEL: Record<string, string> = {
   pending: '等待', running: '执行中', success: '成功', failed: '失败',
   timeout: '超时', cancelled: '已取消', lost: '失联', skipped: '跳过',
+  // Tunnel lifecycle (server uses active/starting/stopped/error).
+  starting: '建立中', active: '运行中', stopped: '已停止', error: '异常',
+  // Agent enrollment lifecycle.
+  approved: '已批准', blocked: '已拉黑',
+  // Audit results.
+  denied: '已拒绝', failure: '失败',
 }
 
 export function statusLabel(s: string): string {

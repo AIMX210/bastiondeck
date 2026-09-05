@@ -7,6 +7,10 @@ const CLASS: Record<string, string> = {
   cancelled: 'b-cancelled', skipped: 'b-skipped',
   online: 'b-success', offline: 'b-timeout', approved: 'b-success',
   blocked: 'b-failed',
+  // Tunnel lifecycle.
+  active: 'b-success', starting: 'b-pending', stopped: 'b-skipped', error: 'b-failed',
+  // Audit.
+  denied: 'b-timeout', failure: 'b-failed',
 }
 
 export function StatusBadge({ status, label }: { status: string; label?: string }) {

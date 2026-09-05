@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/store/auth'
 import { useToast } from '@/lib/toast'
 import { ApiError } from '@/api/client'
@@ -8,6 +8,7 @@ export function LoginPage() {
   const { login } = useAuth()
   const toast = useToast()
   const navigate = useNavigate()
+  const loc = useLocation()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [totp, setTotp] = useState('')
@@ -18,7 +19,8 @@ export function LoginPage() {
     setBusy(true)
     try {
       await login(username, password, totp || undefined)
-      navigate('/')
+      const from = (loc.state as { from?: string } | null)?.from
+      navigate(from && from.startsWith('/') ? from : '/', { replace: true })
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : '登录失败'
       toast.error(msg)

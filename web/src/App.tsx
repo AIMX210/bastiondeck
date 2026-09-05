@@ -1,7 +1,7 @@
-import { HashRouter, Route, Routes } from 'react-router-dom'
+import { HashRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { AuthProvider } from './store/auth'
 import { ToastProvider } from './lib/toast'
-import { Gate } from './components/Guard'
+import { Gate, RequirePerm } from './components/Guard'
 import { Layout } from './components/Layout'
 import { LoginPage } from './pages/Login'
 import { SetupPage } from './pages/Setup'
@@ -22,6 +22,12 @@ import { SettingsPage } from './pages/Settings'
 import { UsersPage } from './pages/Users'
 import { BackupPage } from './pages/Backup'
 
+function NotFound() {
+  return (
+    <div className="topbar"><h1>页面不存在</h1></div>
+  )
+}
+
 export default function App() {
   return (
     <ToastProvider>
@@ -34,20 +40,22 @@ export default function App() {
               <Route path="/" element={<DashboardPage />} />
               <Route path="/hosts" element={<HostsPage />} />
               <Route path="/hosts/:id" element={<HostDetailPage />} />
-              <Route path="/files" element={<FilesPage />} />
-              <Route path="/exec" element={<ExecWizardPage />} />
+              <Route path="/files" element={<RequirePerm perm="exec"><FilesPage /></RequirePerm>} />
+              <Route path="/exec" element={<RequirePerm perm="exec"><ExecWizardPage /></RequirePerm>} />
               <Route path="/runs" element={<RunsPage />} />
               <Route path="/runs/:id" element={<RunDetailPage />} />
               <Route path="/jobs" element={<JobsPage />} />
               <Route path="/tunnels" element={<TunnelsPage />} />
               <Route path="/snippets" element={<SnippetsPage />} />
-              <Route path="/credentials" element={<CredentialsPage />} />
-              <Route path="/agents" element={<AgentsPage />} />
-              <Route path="/audit" element={<AuditPage />} />
+              <Route path="/credentials" element={<RequirePerm perm="exec"><CredentialsPage /></RequirePerm>} />
+              <Route path="/agents" element={<RequirePerm perm="manage_inventory"><AgentsPage /></RequirePerm>} />
+              <Route path="/audit" element={<RequirePerm perm="audit"><AuditPage /></RequirePerm>} />
               <Route path="/settings" element={<SettingsPage />} />
-              <Route path="/users" element={<UsersPage />} />
-              <Route path="/backup" element={<BackupPage />} />
+              <Route path="/users" element={<RequirePerm perm="manage_users"><UsersPage /></RequirePerm>} />
+              <Route path="/backup" element={<RequirePerm perm="owner"><BackupPage /></RequirePerm>} />
+              <Route path="*" element={<NotFound />} />
             </Route>
+            <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </HashRouter>
       </AuthProvider>

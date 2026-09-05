@@ -13,9 +13,10 @@ export function ConfirmButton({
 }) {
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
   return (
     <>
-      <span onClick={() => setOpen(true)}>{children}</span>
+      <span onClick={() => { setErr(null); setOpen(true) }}>{children}</span>
       {open && (
         <Modal
           title={title}
@@ -28,15 +29,25 @@ export function ConfirmButton({
                 disabled={busy}
                 onClick={async () => {
                   setBusy(true)
-                  try { await onConfirm(); setOpen(false) } finally { setBusy(false) }
+                  setErr(null)
+                  try {
+                    await onConfirm()
+                    setOpen(false)
+                  } catch (e) {
+                    // Surface failures instead of silently leaving the user with no feedback.
+                    setErr(e instanceof Error ? e.message : String(e))
+                  } finally {
+                    setBusy(false)
+                  }
                 }}
               >
-                {confirmText}
+                {busy ? '处理中…' : confirmText}
               </button>
             </>
           }
         >
           <p>{message}</p>
+          {err && <div className="err-text" style={{ marginTop: 8 }}>操作失败：{err}</div>}
         </Modal>
       )}
     </>

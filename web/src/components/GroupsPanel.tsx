@@ -8,11 +8,12 @@ import { ConfirmButton } from './Confirm'
 // GroupsPanel manages host groups and shows live member counts. Deleting a
 // group never deletes hosts: members simply fall back to "no group".
 export function GroupsPanel({
-  groups, hosts, reload,
+  groups, hosts, reload, readOnly = false,
 }: {
   groups: Group[]
   hosts: Host[]
   reload: () => void
+  readOnly?: boolean
 }) {
   const toast = useToast()
   const [creating, setCreating] = useState(false)
@@ -55,16 +56,17 @@ export function GroupsPanel({
       <div className="toolbar" style={{ marginBottom: 10 }}>
         <h2 style={{ margin: 0 }}>分组（{groups.length}）</h2>
         <div className="grow" />
-        <button className="sm primary" onClick={() => { setName(''); setCreating(true) }}>+ 新建分组</button>
+        {!readOnly && <button className="sm primary" onClick={() => { setName(''); setCreating(true) }}>+ 新建分组</button>}
       </div>
       {groups.length === 0 ? <div className="muted">暂无分组</div> : (
         <table className="grid">
-          <thead><tr><th>名称</th><th>主机数</th><th style={{ width: 160 }}>操作</th></tr></thead>
+          <thead><tr><th>名称</th><th>主机数</th>{!readOnly && <th style={{ width: 160 }}>操作</th>}</tr></thead>
           <tbody>
             {groups.map((g) => (
               <tr key={g.id}>
                 <td>{g.name}</td>
                 <td>{counts.get(g.id) ?? 0}</td>
+                {readOnly ? null : (
                 <td>
                   <div className="row">
                     <button className="sm" onClick={() => { setRenaming(g); setName(g.name) }}>重命名</button>
@@ -74,6 +76,7 @@ export function GroupsPanel({
                     </ConfirmButton>
                   </div>
                 </td>
+                )}
               </tr>
             ))}
           </tbody>

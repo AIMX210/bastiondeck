@@ -17,7 +17,14 @@ export function Gate({ children }: { children: ReactNode }) {
 export function RequirePerm({ perm, children }: { perm: string; children: ReactNode }) {
   const { can } = useAuth()
   if (!can(perm)) {
-    return <div className="content"><div className="empty">缺少权限：{perm}</div></div>
+    return (
+      <>
+        <div className="topbar"><h1>无权访问</h1></div>
+        <div className="content">
+          <div className="empty">当前角色缺少「{perm}」权限，无法使用该功能。</div>
+        </div>
+      </>
+    )
   }
   return <>{children}</>
 }
