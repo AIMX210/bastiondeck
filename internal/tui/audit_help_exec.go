@@ -52,7 +52,7 @@ func trunc(s string, n int) string {
 
 type helpPane struct{ lines []string }
 
-func newHelpPane() {
+func newHelpPane() helpPane {
 	return helpPane{lines: []string{
 		"Navigation",
 		"  tab / shift+tab   switch pane",
