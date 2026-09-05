@@ -73,7 +73,8 @@ func (s *Server) fsRead(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 502, "fs_error", err.Error())
 		return
 	}
-	writeJSON(w, 200, map[string]any{"path": q.Get("path"), "size": len(b),
+	writeJSON(w, 200, map[string]any{
+		"path": q.Get("path"), "size": len(b),
 		"contentBase64": base64.StdEncoding.EncodeToString(b)})
 }
 

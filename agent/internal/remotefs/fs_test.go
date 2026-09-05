@@ -53,7 +53,7 @@ func TestOptimisticWriteConflict(t *testing.T) {
 	}
 	got, _ := os.ReadFile(p)
 	if string(got) != "current" {
-		t.Fatalf("conflicting write must not change the file")
+		t.Fatal("conflicting write must not change the file")
 	}
 }
 

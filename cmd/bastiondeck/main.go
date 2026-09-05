@@ -149,7 +149,7 @@ func main() {
 			dst, err := vault.FromHex(hexKey)
 			if err != nil {
 				return err
-n			}
+			}
 			n, err := creds.RotateVault(context.Background(), dst)
 			if err != nil {
 				return err

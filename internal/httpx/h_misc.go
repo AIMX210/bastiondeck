@@ -139,7 +139,8 @@ func (s *Server) exportBackup(w http.ResponseWriter, r *http.Request) {
 	}
 	_, _ = s.deps.Audit.Write(r.Context(), s.actorOf(r), "backup.export", "backup", "", "success",
 		map[string]any{"bytes": len(blob)})
-	writeJSON(w, 200, map[string]any{"backupBase64": base64.StdEncoding.EncodeToString(blob), "bytes": len(blob)})
+	writeJSON(w, 200, map[string]any{
+		"backupBase64": base64.StdEncoding.EncodeToString(blob), "bytes": len(blob)})
 }
 
 func (s *Server) inspectBackup(w http.ResponseWriter, r *http.Request) {

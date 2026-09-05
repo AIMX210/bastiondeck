@@ -69,7 +69,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Expose role ordering for guards.
   ;(value as AuthState & { roleAtLeast?: (r: string) => boolean }).roleAtLeast = (r: string) =>
-    ! !user && ROLE_ORDER[user.role] >= ROLE_ORDER[r]
+    !!user && ROLE_ORDER[user.role] >= ROLE_ORDER[r]
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>
 }

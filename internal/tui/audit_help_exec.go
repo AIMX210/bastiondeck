@@ -10,6 +10,7 @@ import (
 )
 
 // ---------- Audit pane ----------
+
 type auditPane struct {
 	items  []apiclient.AuditEntry
 	loaded bool
@@ -48,9 +49,10 @@ func trunc(s string, n int) string {
 }
 
 // ---------- Help pane ----------
+
 type helpPane struct{ lines []string }
 
-func newHelpPane() helpPane {
+func newHelpPane() {
 	return helpPane{lines: []string{
 		"Navigation",
 		"  tab / shift+tab   switch pane",
