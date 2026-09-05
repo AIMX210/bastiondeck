@@ -32,7 +32,9 @@ type Service struct{ db *sql.DB }
 // New constructs the service.
 func New(db *sql.DB) *Service { return &Service{db: db} }
 
-var varRe = regexp.MustCompile(`\$\{([a-zA-Z0-9_.-]+)\}`)
+// varRe tolerates optional whitespace inside the braces, e.g. "${ name }",
+// matching what the web wizard accepts.
+var varRe = regexp.MustCompile(`\$\{\s*([a-zA-Z0-9_.-]+)\s*\}`)
 
 // RequiredVars returns the sorted unique variables referenced in a body.
 func RequiredVars(body string) []string {
@@ -53,7 +55,7 @@ func RequiredVars(body string) []string {
 func Render(body string, vars map[string]string) (string, []string) {
 	var missing []string
 	out := varRe.ReplaceAllStringFunc(body, func(m string) string {
-		name := m[2 : len(m)-1]
+		name := varRe.FindStringSubmatch(m)[1]
 		if v, ok := vars[name]; ok {
 			return v
 		}

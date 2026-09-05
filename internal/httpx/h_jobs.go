@@ -2,6 +2,7 @@ package httpx
 
 import (
 	"net/http"
+	"strings"
 	"time"
 
 	"bastiondeck/internal/connector"
@@ -48,13 +49,16 @@ func (s *Server) execOnce(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, 404, "not_found", err.Error())
 			return
 		}
-		rendered, missing := renderBody(sn.Body, req.Vars)
-		if len(missing) > 0 {
-			writeErr(w, 422, "missing_vars", "missing variables")
-			return
-		}
-		cmd = rendered
+		cmd = sn.Body
 	}
+	// Render ${var} placeholders for BOTH snippet bodies and ad-hoc commands;
+	// block on any unfilled variable instead of shipping a literal "${name}".
+	rendered, missing := renderBody(cmd, req.Vars)
+	if len(missing) > 0 {
+		writeErr(w, 422, "missing_vars", "missing variables: "+strings.Join(missing, ", "))
+		return
+	}
+	cmd = rendered
 	targets, err := s.resolveTargets(r, req.TargetIDs, req.GroupID)
 	if err != nil {
 		fail(w, err)

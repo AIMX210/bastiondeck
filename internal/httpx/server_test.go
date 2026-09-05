@@ -163,7 +163,7 @@ func TestFullFlowSetupToExec(t *testing.T) {
 	for time.Now().Before(deadline) {
 		st, body = ts.do(t, "GET", "/api/runs/"+runID, cookie, nil)
 		if st != 200 {
-			t.Fatalf("get run %d", st)
+		t.Fatalf("get run %d", st)
 		}
 		run := body["data"].(map[string]any)["run"].(map[string]any)
 		status := run["status"].(string)
@@ -178,6 +178,52 @@ func TestFullFlowSetupToExec(t *testing.T) {
 	}
 	if final == nil {
 		t.Fatal("run never succeeded")
+	}
+}
+
+// Ad-hoc (non-snippet) commands must still have ${var} placeholders rendered;
+// an unfilled variable is rejected with 422 rather than sent literally.
+func TestAdhocCommandRendersVars(t *testing.T) {
+	seen := make(chan string, 4)
+	srv := testutil.NewFakeSSH(t, "pw", "", func(cmd string) ([]byte, []byte, int) {
+		seen <- cmd
+		return []byte("ok\n"), nil, 0
+	})
+	defer srv.Close()
+	addr, port := srv.Addr()
+	ts := newTestServer(t, addr, port, nil)
+	cookie := setupOwner(t, ts)
+
+	// Missing variable -> 422 before any target is contacted.
+	st, body := ts.do(t, "POST", "/api/exec", cookie, map[string]any{
+		"command": "echo ${who}", "targetIds": []string{}, "timeoutSec": 5})
+	if st != 422 || body["error"].(map[string]any)["code"] != "missing_vars" {
+		t.Fatalf("missing-var exec = %d %v", st, body)
+	}
+
+	// Set up a host for the filled-variable path.
+	st, body = ts.do(t, "POST", "/api/credentials", cookie,
+		map[string]string{"name": "c", "kind": "password", "secret": "pw"})
+	credID := body["data"].(map[string]any)["credential"].(map[string]any)["id"].(string)
+	st, body = ts.do(t, "POST", "/api/hosts", cookie, map[string]any{
+		"name": "h", "address": addr, "port": port, "username": "tester",
+		"credentialId": credID, "authKind": "credential"})
+	hostID := body["data"].(map[string]any)["host"].(map[string]any)["id"].(string)
+
+	// Filled variable (with tolerated inner whitespace) reaches SSH rendered.
+	st, body = ts.do(t, "POST", "/api/exec", cookie, map[string]any{
+		"command": "echo ${ who }", "vars": map[string]string{"who": "world"},
+		"targetIds": []string{hostID}, "timeoutSec": 5})
+	if st != 202 {
+		t.Fatalf("exec filled = %d %v", st, body)
+	}
+	select {
+	case cmd := <-seen:
+		if cmd != "echo world" {
+			t.Fatalf("remote command = %q, want %q", cmd, "echo world")
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("rendered command never reached the SSH server")
 	}
 }
 

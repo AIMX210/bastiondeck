@@ -33,6 +33,19 @@ func TestRenderMissingKeptAndReported(t *testing.T) {
 	}
 }
 
+func TestRenderToleratesInnerWhitespace(t *testing.T) {
+	// The web wizard accepts "${ name }"; the server must render it the same
+	// way rather than treating the spaced form as a literal.
+	got := RequiredVars("echo ${ name } ${env\t}")
+	if len(got) != 2 || got[0] != "env" || got[1] != "name" {
+		t.Fatalf("vars = %v", got)
+	}
+	out, missing := Render("echo ${ name }-${ env }", map[string]string{"name": "ops", "env": "prod"})
+	if out != "echo ops-prod" || len(missing) != 0 {
+		t.Fatalf("out=%q missing=%v", out, missing)
+	}
+}
+
 func TestSnippetLifecycle(t *testing.T) {
 	h := testutil.NewHarness(t)
 	s := New(h.Store.DB)

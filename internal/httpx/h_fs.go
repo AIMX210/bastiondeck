@@ -1,7 +1,9 @@
 package httpx
 
 import (
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"net/http"
 
 	"bastiondeck/internal/connector"
@@ -73,8 +75,13 @@ func (s *Server) fsRead(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 502, "fs_error", err.Error())
 		return
 	}
+	// sha256 of the returned bytes feeds the optimistic-lock ExpectedSha on
+	// write. Files larger than the read limit are treated as read-only by the
+	// UI, so within the editable range this equals the whole-file digest.
+	sum := sha256.Sum256(b)
 	writeJSON(w, 200, map[string]any{
 		"path": q.Get("path"), "size": len(b),
+		"sha256":        hex.EncodeToString(sum[:]),
 		"contentBase64": base64.StdEncoding.EncodeToString(b)})
 }
 
