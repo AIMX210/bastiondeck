@@ -16,6 +16,7 @@ import (
 
 	"bastiondeck/internal/agentconn"
 	"bastiondeck/internal/audit"
+	"bastiondeck/internal/factscat"
 	"bastiondeck/internal/auth"
 	"bastiondeck/internal/backup"
 	"bastiondeck/internal/bootstrap"
@@ -118,6 +119,7 @@ func main() {
 		Creds: creds, Hosts: hosts, Snippets: snips, Jobs: engine, JobRepo: jobRepo,
 		Tunnels: tunnels, Metrics: metrics, Hub: hub, Connector: mgr, Scheduler: sched,
 		Agents: agents, Backup: backupSvc, Settings: settingsSvc, Version: version.Short(),
+		Factscat: factscat.NewCache(),
 	})
 
 	rootCtx, cancel := context.WithCancel(context.Background())

@@ -45,6 +45,7 @@ func (s *Server) routes() {
 	m.HandleFunc("POST /api/hosts/{id}/test", s.requirePerm(auth.PermExec, s.testHost))
 	m.HandleFunc("POST /api/hosts/{id}/reset-host-key", s.requirePerm(auth.PermManageInventory, s.resetHostKey))
 	m.HandleFunc("POST /api/hosts/{id}/facts", s.requirePerm(auth.PermExec, s.hostFacts))
+	m.HandleFunc("POST /api/hosts/{id}/metrics", s.requirePerm(auth.PermExec, s.hostFactscat))
 	m.HandleFunc("POST /api/hosts/import-sshconfig", s.requirePerm(auth.PermManageInventory, s.importSSHConfig))
 	m.HandleFunc("GET /api/groups", s.requirePerm(auth.PermRead, s.listGroups))
 	m.HandleFunc("POST /api/groups", s.requirePerm(auth.PermManageInventory, s.createGroup))

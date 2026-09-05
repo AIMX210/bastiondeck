@@ -1,6 +1,7 @@
 package httpx
 
 import (
+	"bastiondeck/internal/factscat"
 	"net/http"
 	"time"
 
@@ -24,6 +25,7 @@ import (
 
 // Deps wires every service consumed by HTTP handlers.
 type Deps struct {
+	Factscat *factscat.Cache
 	Cfg   *config.Config
 	Store *store.Store
 	Vault interface {
