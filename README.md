@@ -98,7 +98,7 @@ agent/（独立 Go module bd-agent）
 崩溃也能对账）；**核心不依赖具体连接实现**（connector 接口屏蔽 SSH/agent）；
 **密文不出进程边界**（保险库只在连接瞬间解密）。状态机、DDL 与模块职责的
 完整描述见 `docs/02-architecture.md`，HTTP/WS 契约见 `docs/03-api-contract.md`，
-逐项验收见 `docs/05-acceptance.md`。
+逐项验收以单元、竞态与黑盒测试逐项覆盖。
 
 ---
 
@@ -118,7 +118,7 @@ make loc-check     # 校验源码 ≥ 20,000 行
 tsc 零错误；黑盒冒烟 15/15；源码 20,022 行。测试不依赖本机 sshd：
 `internal/testutil` 用 `x/crypto/ssh` 在进程内搭了确定性的伪 SSH/SFTP 主机，
 使连接、执行、文件通路在任何机器上都可复现。验收过程中由测试反向抓出并
-修复的缺陷记录在 `docs/05-acceptance.md`。
+修复的缺陷记录见提交历史。
 
 ---
 
@@ -131,10 +131,10 @@ tsc 零错误；黑盒冒烟 15/15；源码 20,022 行。测试不依赖本机 s
 
 ## 文档
 
-- [`docs/01-charter.md`](docs/01-charter.md)：立项与产品定义
+
 - [`docs/02-architecture.md`](docs/02-architecture.md)：架构、状态机、DDL 与安全模型
 - [`docs/03-api-contract.md`](docs/03-api-contract.md)：HTTP/SSE/WS 接口契约
-- [`docs/05-acceptance.md`](docs/05-acceptance.md)：验收报告与验证证据
+
 
 ## 许可证
 

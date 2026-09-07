@@ -1,6 +1,6 @@
 # BastionDeck 架构设计文档（Architecture）
 
-> 配套文档：`01-charter.md`（立项）、`03-api-contract.md`（接口契约）。
+> 配套文档：`03-api-contract.md`（接口契约）。
 > 本文描述 M0 冻结的目标架构；所有实现必须与此一致，偏离需补 ADR。
 
 ## 1. 架构约束与原则
